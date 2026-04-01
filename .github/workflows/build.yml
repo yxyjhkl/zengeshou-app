@@ -28,7 +28,7 @@ jobs:
           mv cmdline-tools $ANDROID_SDK_ROOT/cmdline-tools/latest
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-31" "build-tools;34.0.0" "ndk;25.2.5.96505"
+          sdkmanager "platform-tools" "platforms;android-31" "build-tools;34.0.0"
 
       - name: Install Python dependencies
         run: |
@@ -41,7 +41,6 @@ jobs:
         run: |
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           export ANDROID_SDK_ROOT=$HOME/android-sdk
-          export ANDROIDNDKROOT=$HOME/android-sdk/ndk/25.2.5.96505
           export PATH=$PATH:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools
           buildozer android debug
         env:
