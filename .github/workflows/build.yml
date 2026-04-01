@@ -27,15 +27,15 @@ jobs:
           unzip -q commandlinetools-linux-9477386_latest.zip
           rm commandlinetools-linux-9477386_latest.zip
           
-          # 将解压出的 cmdline-tools 目录重命名为 latest，并移入 cmdline-tools 目录
+          # 创建正确的目录结构：cmdline-tools/latest
           mv cmdline-tools latest
           mkdir -p cmdline-tools
           mv latest cmdline-tools/
           
-          # 验证目录结构
+          # 验证
           ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
           
-          # 设置环境变量（供后续步骤使用）
+          # 设置环境变量
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
@@ -80,8 +80,14 @@ jobs:
           fi
           # 确保 android.api 是整数
           sed -i 's|^android.api.*|android.api = 31|' buildozer.spec
+          # 添加 NDK 路径（Buildozer 下载的位置），避免与系统 NDK 冲突
+          if ! grep -q "^android.ndk_path" buildozer.spec; then
+            echo "android.ndk_path = $HOME/.buildozer/android/platform/android-ndk-r25b" >> buildozer.spec
+          else
+            sed -i "s|^android.ndk_path.*|android.ndk_path = $HOME/.buildozer/android/platform/android-ndk-r25b|" buildozer.spec
+          fi
           echo "buildozer.spec configuration:"
-          grep -E "android\.(sdk_path|build_tools_version|api)" buildozer.spec
+          grep -E "android\.(sdk_path|build_tools_version|api|ndk_path)" buildozer.spec
 
       - name: Create symlink for Buildozer default path (optional)
         run: |
@@ -98,10 +104,13 @@ jobs:
           pip install buildozer==1.5.0
           pip install pdfplumber openpyxl pillow
 
-      - name: Build APK
+      - name: Build APK with verbose output
         run: |
+          # 清除可能干扰的 NDK 环境变量，让 Buildozer 使用自己下载的 NDK
+          unset ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT
           export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-          buildozer android debug
+          # 使用 --verbose 获取更多构建信息
+          buildozer android debug --verbose
         env:
           JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
