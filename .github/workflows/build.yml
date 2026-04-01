@@ -27,9 +27,8 @@ jobs:
           unzip -q commandlinetools-linux-9477386_latest.zip
           rm commandlinetools-linux-9477386_latest.zip
           
-          # 将解压出的 cmdline-tools 目录重命名为 latest
+          # 将解压出的 cmdline-tools 目录重命名为 latest，并移入 cmdline-tools 目录
           mv cmdline-tools latest
-          # 创建最终的 cmdline-tools 目录，并将 latest 移入其中
           mkdir -p cmdline-tools
           mv latest cmdline-tools/
           
@@ -40,6 +39,12 @@ jobs:
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
+      # 创建软链接，让 Buildozer 能在旧路径 tools/bin/sdkmanager 找到 sdkmanager
+      - name: Create symlink for legacy SDK structure
+        run: |
+          ln -sf $ANDROID_SDK_ROOT/cmdline-tools/latest $ANDROID_SDK_ROOT/tools
+          ls -la $ANDROID_SDK_ROOT/tools/bin/
 
       - name: Accept Android licenses and install required components
         run: |
