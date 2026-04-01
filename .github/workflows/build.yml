@@ -18,57 +18,62 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y openjdk-11-jdk wget unzip zip libffi-dev libssl-dev build-essential git python3-dev
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v2
-
-      - name: Install required SDK components (build-tools 31.0.0, platforms android-31)
+      # 手动下载 Android SDK（而不是使用 action）
+      - name: Download and install Android SDK
         run: |
-          # 查找 sdkmanager（路径可能因 action 版本而异）
-          SDKMANAGER=$(find $ANDROID_SDK_ROOT -name sdkmanager -type f 2>/dev/null | head -n1)
-          if [ -z "$SDKMANAGER" ]; then
-            echo "❌ sdkmanager not found"
-            exit 1
-          fi
-          echo "Found sdkmanager at $SDKMANAGER"
+          mkdir -p $HOME/android-sdk
+          cd $HOME/android-sdk
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+          unzip -q commandlinetools-linux-9477386_latest.zip
+          rm commandlinetools-linux-9477386_latest.zip
+          mkdir -p cmdline-tools
+          mv cmdline-tools cmdline-tools/latest  # 结构要求：cmdline-tools/latest/bin/sdkmanager
+          # 设置环境变量
+          echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+          echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
-          # 安装所需组件（自动接受许可）
-          yes | $SDKMANAGER --licenses > /dev/null 2>&1
-          yes | $SDKMANAGER "build-tools;31.0.0" "platforms;android-31" > /dev/null
-
-          # 验证 aidl 是否已安装
-          if [ -f "$ANDROID_SDK_ROOT/build-tools/31.0.0/aidl" ]; then
-            echo "✅ aidl installed successfully"
+      - name: Accept Android licenses and install required components
+        run: |
+          # 接受所有许可（非交互式）
+          yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
+          
+          # 安装平台工具、build-tools 和平台
+          $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;31.0.0" "platforms;android-31"
+          
+          # 验证 build-tools 是否安装成功
+          if [ -d "$ANDROID_SDK_ROOT/build-tools/31.0.0" ]; then
+            echo "✅ build-tools 31.0.0 installed"
+            ls -la $ANDROID_SDK_ROOT/build-tools/31.0.0/
           else
-            echo "❌ aidl not found after manual installation"
-            echo "Contents of build-tools:"
-            ls -la $ANDROID_SDK_ROOT/build-tools/
+            echo "❌ build-tools 31.0.0 not found"
+            echo "Contents of $ANDROID_SDK_ROOT/build-tools:"
+            ls -la $ANDROID_SDK_ROOT/build-tools/ || echo "build-tools directory does not exist"
             exit 1
           fi
 
-      - name: Configure buildozer.spec with correct SDK path and build-tools version
+      - name: Configure buildozer.spec
         run: |
-          # 确保 buildozer.spec 中有正确的 SDK 路径和 build-tools 版本
+          # 添加 SDK 路径和 build-tools 版本
           if ! grep -q "^android.sdk_path" buildozer.spec; then
-            echo "android.sdk_path = /opt/android-sdk" >> buildozer.spec
+            echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
           else
-            sed -i 's|^android.sdk_path.*|android.sdk_path = /opt/android-sdk|' buildozer.spec
+            sed -i "s|^android.sdk_path.*|android.sdk_path = $HOME/android-sdk|" buildozer.spec
           fi
           if ! grep -q "^android.build_tools_version" buildozer.spec; then
             echo "android.build_tools_version = 31.0.0" >> buildozer.spec
           else
             sed -i 's|^android.build_tools_version.*|android.build_tools_version = 31.0.0|' buildozer.spec
           fi
-          # 修正 android.api 为整数
+          # 确保 android.api 是整数
           sed -i 's|^android.api.*|android.api = 31|' buildozer.spec
-          # 打印确认
           echo "buildozer.spec configuration:"
           grep -E "android\.(sdk_path|build_tools_version|api)" buildozer.spec
 
-      - name: Create symlink to SDK in Buildozer default location
+      - name: Create symlink for Buildozer default path (optional)
         run: |
           mkdir -p /home/runner/.buildozer/android/platform
-          ln -sf /opt/android-sdk /home/runner/.buildozer/android/platform/android-sdk
-          ls -la /home/runner/.buildozer/android/platform/
+          ln -sf $HOME/android-sdk /home/runner/.buildozer/android/platform/android-sdk
 
       - name: Add build-tools to PATH
         run: echo "$ANDROID_SDK_ROOT/build-tools/31.0.0" >> $GITHUB_PATH
@@ -86,8 +91,8 @@ jobs:
           buildozer android debug
         env:
           JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
-          ANDROID_SDK_ROOT: /opt/android-sdk
-          ANDROID_HOME: /opt/android-sdk   # 额外设置 ANDROID_HOME 以兼容
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
