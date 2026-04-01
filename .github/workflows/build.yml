@@ -27,76 +27,42 @@ jobs:
           unzip -q commandlinetools-linux-9477386_latest.zip
           rm commandlinetools-linux-9477386_latest.zip
           
-          # 创建正确的目录结构：cmdline-tools/latest
           mv cmdline-tools latest
           mkdir -p cmdline-tools
           mv latest cmdline-tools/
           
-          # 验证
-          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
-          
-          # 设置环境变量
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
-      # 创建软链接，让 Buildozer 能在旧路径 tools/bin/sdkmanager 找到 sdkmanager
+      # 创建软链接，让 Buildozer 能在旧路径找到 sdkmanager
       - name: Create symlink for legacy SDK structure
         run: |
           ln -sf $ANDROID_SDK_ROOT/cmdline-tools/latest $ANDROID_SDK_ROOT/tools
-          ls -la $ANDROID_SDK_ROOT/tools/bin/
 
-      - name: Accept Android licenses and install required components
+      # 接受许可并安装所需组件
+      - name: Accept licenses and install components
         run: |
-          # 接受所有许可
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
-          
-          # 安装所需组件
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;31.0.0" "platforms;android-31"
-          
-          # 验证 build-tools 是否安装成功
+
+      # 验证 build-tools 是否安装成功
+      - name: Verify build-tools
+        run: |
           if [ -d "$ANDROID_SDK_ROOT/build-tools/31.0.0" ]; then
             echo "✅ build-tools 31.0.0 installed"
-            ls -la $ANDROID_SDK_ROOT/build-tools/31.0.0/
           else
             echo "❌ build-tools 31.0.0 not found"
-            echo "Contents of $ANDROID_SDK_ROOT/build-tools:"
-            ls -la $ANDROID_SDK_ROOT/build-tools/ || echo "build-tools directory does not exist"
             exit 1
           fi
 
-      - name: Configure buildozer.spec
-        run: |
-          # 添加 SDK 路径和 build-tools 版本（如果已存在则替换）
-          if ! grep -q "^android.sdk_path" buildozer.spec; then
-            echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
-          else
-            sed -i "s|^android.sdk_path.*|android.sdk_path = $HOME/android-sdk|" buildozer.spec
-          fi
-          if ! grep -q "^android.build_tools_version" buildozer.spec; then
-            echo "android.build_tools_version = 31.0.0" >> buildozer.spec
-          else
-            sed -i 's|^android.build_tools_version.*|android.build_tools_version = 31.0.0|' buildozer.spec
-          fi
-          # 确保 android.api 是整数
-          sed -i 's|^android.api.*|android.api = 31|' buildozer.spec
-          # 添加 NDK 路径（Buildozer 下载的位置），避免与系统 NDK 冲突
-          if ! grep -q "^android.ndk_path" buildozer.spec; then
-            echo "android.ndk_path = $HOME/.buildozer/android/platform/android-ndk-r25b" >> buildozer.spec
-          else
-            sed -i "s|^android.ndk_path.*|android.ndk_path = $HOME/.buildozer/android/platform/android-ndk-r25b|" buildozer.spec
-          fi
-          echo "buildozer.spec configuration:"
-          grep -E "android\.(sdk_path|build_tools_version|api|ndk_path)" buildozer.spec
-
-      - name: Create symlink for Buildozer default path (optional)
+      # 创建 Buildozer 默认路径的软链接（可选，增强兼容性）
+      - name: Create symlink for Buildozer default path
         run: |
           mkdir -p /home/runner/.buildozer/android/platform
           ln -sf $HOME/android-sdk /home/runner/.buildozer/android/platform/android-sdk
 
-      - name: Add build-tools to PATH
-        run: echo "$ANDROID_SDK_ROOT/build-tools/31.0.0" >> $GITHUB_PATH
-
+      # 安装 Python 依赖
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
@@ -104,18 +70,36 @@ jobs:
           pip install buildozer==1.5.0
           pip install pdfplumber openpyxl pillow
 
+      # 构建 APK（如果失败，后续步骤会手动运行 Gradle 以获取详细错误）
       - name: Build APK with verbose output
+        id: build_apk
+        continue-on-error: true
         run: |
-          # 清除可能干扰的 NDK 环境变量，让 Buildozer 使用自己下载的 NDK
           unset ANDROID_NDK ANDROID_NDK_HOME ANDROID_NDK_ROOT
           export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-          # 使用 --verbose 获取更多构建信息
           buildozer android debug --verbose
         env:
           JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
           ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
 
+      # 如果 Buildozer 失败，则进入 Gradle 项目目录手动执行 gradlew 获取详细错误
+      - name: If build failed, run Gradle manually with stacktrace
+        if: steps.build_apk.outcome == 'failure'
+        run: |
+          echo "Buildozer failed, attempting to run Gradle manually for detailed error..."
+          GRADLE_DIR=$(find .buildozer -name "gradlew" -type f -exec dirname {} \; | head -1)
+          if [ -d "$GRADLE_DIR" ]; then
+            cd "$GRADLE_DIR"
+            chmod +x gradlew
+            echo "Running gradlew assembleDebug --stacktrace"
+            ./gradlew assembleDebug --stacktrace
+          else
+            echo "No gradlew found in .buildozer"
+            exit 1
+          fi
+
+      # 上传 APK（如果构建成功）
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
