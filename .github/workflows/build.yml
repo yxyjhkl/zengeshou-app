@@ -18,14 +18,36 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y openjdk-17-jdk wget unzip zip libffi-dev libssl-dev build-essential git python3-dev
 
+      # 安装 Android SDK 并指定需要的组件（API 31 及对应的 build-tools）
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
+        with:
+          packages: >
+            platform-tools
+            build-tools;31.0.0
+            platforms;android-31
+
+      # 验证 aidl 是否已成功安装
+      - name: Verify aidl
+        run: |
+          if [ -f "$ANDROID_SDK_ROOT/build-tools/31.0.0/aidl" ]; then
+            echo "✅ aidl found"
+          else
+            echo "❌ aidl not found"
+            ls -la $ANDROID_SDK_ROOT/build-tools/
+            exit 1
+          fi
+
+      # 将 build-tools 目录添加到 PATH，确保 buildozer 能找到 aidl
+      - name: Add build-tools to PATH
+        run: echo "$ANDROID_SDK_ROOT/build-tools/31.0.0" >> $GITHUB_PATH
 
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
           pip install cython==0.29.37
           pip install buildozer==1.5.0
+          # 以下包已在 buildozer.spec 的 requirements 中列出，这里预先安装可加速构建（可选）
           pip install pdfplumber openpyxl pillow
 
       - name: Build APK
