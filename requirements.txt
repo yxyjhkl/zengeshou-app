@@ -1,0 +1,6 @@
+buildozer
+pdfplumber
+openpyxl
+pillow
+kivy
+plyer
