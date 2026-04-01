@@ -18,7 +18,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y openjdk-11-jdk wget unzip zip libffi-dev libssl-dev build-essential git python3-dev
 
-      # 手动下载 Android SDK（而不是使用 action）
+      # 手动下载 Android SDK 并整理目录结构
       - name: Download and install Android SDK
         run: |
           mkdir -p $HOME/android-sdk
@@ -26,19 +26,27 @@ jobs:
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
           unzip -q commandlinetools-linux-9477386_latest.zip
           rm commandlinetools-linux-9477386_latest.zip
+          
+          # 将解压出的 cmdline-tools 目录重命名为 latest
+          mv cmdline-tools latest
+          # 创建最终的 cmdline-tools 目录，并将 latest 移入其中
           mkdir -p cmdline-tools
-          mv cmdline-tools cmdline-tools/latest  # 结构要求：cmdline-tools/latest/bin/sdkmanager
-          # 设置环境变量
+          mv latest cmdline-tools/
+          
+          # 验证目录结构
+          ls -la $HOME/android-sdk/cmdline-tools/latest/bin/
+          
+          # 设置环境变量（供后续步骤使用）
           echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
           echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
           echo "$HOME/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
 
       - name: Accept Android licenses and install required components
         run: |
-          # 接受所有许可（非交互式）
+          # 接受所有许可
           yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1
           
-          # 安装平台工具、build-tools 和平台
+          # 安装所需组件
           $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager "platform-tools" "build-tools;31.0.0" "platforms;android-31"
           
           # 验证 build-tools 是否安装成功
@@ -54,7 +62,7 @@ jobs:
 
       - name: Configure buildozer.spec
         run: |
-          # 添加 SDK 路径和 build-tools 版本
+          # 添加 SDK 路径和 build-tools 版本（如果已存在则替换）
           if ! grep -q "^android.sdk_path" buildozer.spec; then
             echo "android.sdk_path = $HOME/android-sdk" >> buildozer.spec
           else
