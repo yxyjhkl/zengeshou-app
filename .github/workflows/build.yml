@@ -20,34 +20,35 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v2
-        # 不指定 packages，让 action 安装默认组件（后续手动补充需要的版本）
 
       - name: Install required SDK components (build-tools 31.0.0, platforms android-31)
         run: |
-          # 定位 sdkmanager 的路径
-          if [ -f "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-          elif [ -f "$ANDROID_SDK_ROOT/tools/bin/sdkmanager" ]; then
-            SDKMANAGER="$ANDROID_SDK_ROOT/tools/bin/sdkmanager"
-          else
+          # 查找 sdkmanager（支持不同版本存放路径）
+          SDKMANAGER=$(find $ANDROID_SDK_ROOT -name sdkmanager -type f 2>/dev/null | head -n1)
+          if [ -z "$SDKMANAGER" ]; then
             echo "sdkmanager not found"
             exit 1
           fi
+          echo "Found sdkmanager at $SDKMANAGER"
 
-          # 安装需要的 build-tools 和 platforms
+          # 安装所需组件（自动接受许可）
+          yes | $SDKMANAGER --licenses > /dev/null 2>&1
           yes | $SDKMANAGER "build-tools;31.0.0" "platforms;android-31" > /dev/null
 
-          # 验证 aidl 是否存在
+          # 验证安装
           if [ -f "$ANDROID_SDK_ROOT/build-tools/31.0.0/aidl" ]; then
-            echo "✅ aidl found"
+            echo "✅ aidl installed successfully"
           else
-            echo "❌ aidl not found"
+            echo "❌ aidl not found after manual installation"
+            echo "Contents of build-tools:"
             ls -la $ANDROID_SDK_ROOT/build-tools/
             exit 1
           fi
 
-      - name: Add build-tools to PATH
-        run: echo "$ANDROID_SDK_ROOT/build-tools/31.0.0" >> $GITHUB_PATH
+      - name: Add build-tools to PATH and set environment variable
+        run: |
+          echo "$ANDROID_SDK_ROOT/build-tools/31.0.0" >> $GITHUB_PATH
+          echo "ANDROID_BUILD_TOOLS=31.0.0" >> $GITHUB_ENV
 
       - name: Install Python dependencies
         run: |
