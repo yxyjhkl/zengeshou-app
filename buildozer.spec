@@ -9,7 +9,7 @@ requirements = python3,kivy,pdfplumber,openpyxl,pillow
 orientation = portrait
 fullscreen = 0
 android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
-android.api = 31
+android.api = 31.0.0
 android.minapi = 21
 android.archs = arm64-v8a, armeabi-v7a
 
