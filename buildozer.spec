@@ -13,6 +13,10 @@ android.api = 31
 android.minapi = 21
 android.archs = arm64-v8a, armeabi-v7a
 
+# 明确指定 SDK 安装路径和 build-tools 版本
+android.sdk_path = /opt/android-sdk
+android.build_tools_version = 31.0.0
+
 [buildozer]
 log_level = 2
 warn_on_root = 1
