@@ -13,9 +13,11 @@ android.api = 31
 android.minapi = 21
 android.archs = arm64-v8a, armeabi-v7a
 
-# 明确指定 SDK 安装路径和 build-tools 版本
-android.sdk_path = /opt/android-sdk
+# 关键配置：指定 SDK 和 NDK 路径，避免与系统环境冲突
+android.sdk_path = /home/runner/android-sdk
+android.ndk_path = /home/runner/.buildozer/android/platform/android-ndk-r25b
 android.build_tools_version = 31.0.0
+android.gradle_version = 7.6.3
 
 [buildozer]
 log_level = 2
